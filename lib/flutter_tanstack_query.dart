@@ -1,5 +1,6 @@
-/// A Calculator.
-class Calculator {
-  /// Returns [value] plus 1.
-  int addOne(int value) => value + 1;
-}
+library flutter_tanstack_query;
+
+//Core types and states
+export 'src/core/query_config.dart';
+export 'src/core/query_state.dart';
+export 'src/core/types.dart';
