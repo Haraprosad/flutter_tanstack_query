@@ -1,6 +1,6 @@
 import 'package:meta/meta.dart';
 
-import 'types.dart';
+import 'types.dart'; // Ensure this import path is correct for QueryStatus and MutationStatus
 
 ///Represents the state of a single query.
 ///
@@ -82,6 +82,7 @@ class QueryState<T> {
     QueryStatus? status,
     bool? isStale,
     DateTime? lastFetched,
+    // Removed 'required bool isLoading' as it's a derived getter
   }) {
     return QueryState._(
       data: data ?? this.data,

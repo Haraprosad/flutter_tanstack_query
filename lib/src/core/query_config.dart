@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart'; // For listEquals in MutationConfig's operator==
+
 /// Configuration options for a single query.
 class QueryConfig {
   /// The duration after which cached data is considered stale.
@@ -54,6 +56,45 @@ class QueryConfig {
       enabled: enabled ?? this.enabled,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is QueryConfig &&
+        other.runtimeType == runtimeType &&
+        other.staleTime == staleTime &&
+        other.cacheTime == cacheTime &&
+        other.retryCount == retryCount &&
+        other.retryDelay == retryDelay &&
+        other.refetchOnWindowFocus == refetchOnWindowFocus &&
+        other.refetchOnReconnect == refetchOnReconnect &&
+        other.enabled == enabled;
+  }
+
+  @override
+  int get hashCode {
+    return Object.hash(
+      staleTime,
+      cacheTime,
+      retryCount,
+      retryDelay,
+      refetchOnWindowFocus,
+      refetchOnReconnect,
+      enabled,
+    );
+  }
+}
+
+/// A wrapper class used in copyWith to distinguish between a null value
+/// being explicitly provided and a parameter being omitted.
+///
+/// If a copyWith parameter is of type `Value<T>?`:
+/// - `null` means the parameter was omitted (keep existing value).
+/// - `Value(null)` means explicitly set the field to null.
+/// - `Value(someValue)` means set the field to `someValue`.
+class Value<T> {
+  final T value;
+  const Value(this.value);
 }
 
 /// Configuration options for a single mutation.
@@ -86,4 +127,59 @@ class MutationConfig<T, V> {
     this.onError,
     this.timeout,
   });
+
+  /// Creates a copy of this [MutationConfig] with updated values.
+  ///
+  /// For nullable properties like `optimisticUpdate`, `onSuccess`, `onError`, and `timeout`:
+  /// - Omit the parameter to keep its current value.
+  /// - Pass `Value(null)` to explicitly set the property to `null`.
+  /// - Pass `Value(newValue)` to set the property to a new non-null value.
+  ///
+  /// For `invalidateQueries`, which is a non-nullable list:
+  /// - Omit the parameter to keep its current value.
+  /// - Pass `[]` or a new list to set its value.
+  MutationConfig<T, V> copyWith({
+    Value<T Function(V variables, T? previousData)?>? optimisticUpdate,
+    List<List<Object>>? invalidateQueries,
+    Value<void Function(T data)?>? onSuccess,
+    Value<void Function(Object error)?>? onError,
+    Value<Duration?>? timeout,
+  }) {
+    return MutationConfig<T, V>(
+      optimisticUpdate: optimisticUpdate != null
+          ? optimisticUpdate.value
+          : this.optimisticUpdate,
+      invalidateQueries: invalidateQueries ?? this.invalidateQueries,
+      onSuccess: onSuccess != null ? onSuccess.value : this.onSuccess,
+      onError: onError != null ? onError.value : this.onError,
+      timeout: timeout != null ? timeout.value : this.timeout,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is MutationConfig<T, V> &&
+        other.runtimeType == runtimeType && // Ensure same generic types
+        other.optimisticUpdate == optimisticUpdate &&
+        listEquals(
+          other.invalidateQueries,
+          invalidateQueries,
+        ) && // Deep comparison
+        other.onSuccess == onSuccess &&
+        other.onError == onError &&
+        other.timeout == timeout;
+  }
+
+  @override
+  int get hashCode {
+    return Object.hash(
+      optimisticUpdate,
+      // Create a hash for the list of lists
+      Object.hashAll(invalidateQueries.map((e) => Object.hashAll(e))),
+      onSuccess,
+      onError,
+      timeout,
+    );
+  }
 }
