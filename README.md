@@ -1,7 +1,7 @@
 # 🚀 Flutter TanStack Query
 
 <p align="center">
-  <img src="assets/icons/flutter_tanstack_query_logo.png" alt="Flutter TanStack Query Logo" width="100" height="100">
+  <img src="https://raw.githubusercontent.com/Haraprosad/flutter_tanstack_query/refs/heads/main/assets/icons/flutter_tanstack_query_icon.png" alt="Flutter TanStack Query Logo" width="100" height="100">
 </p>
 
 <p align="center">
