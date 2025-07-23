@@ -1,9 +1,23 @@
 # 🚀 Flutter TanStack Query
 
-[![pub package](https://img.shields.io/pub/v/flutter_tanstack_query.svg)](https://pub.dev/packages/flutter_tanstack_query)
-[![popularity](https://badges.bar/flutter_tanstack_query/popularity)](https://pub.dev/packages/flutter_tanstack_query/score)
-[![likes](https://badges.bar/flutter_tanstack_query/likes)](https://pub.dev/packages/flutter_tanstack_query/score)
-[![pub points](https://badges.bar/flutter_tanstack_query/pub%20points)](https://pub.dev/packages/flutter_tanstack_query/score)
+<p align="center">
+  <img src="assets/icons/flutter_tanstack_query_logo.png" alt="Flutter TanStack Query Logo" width="100" height="100">
+</p>
+
+<p align="center">
+  <a href="https://pub.dev/packages/flutter_tanstack_query"><img src="https://img.shields.io/pub/v/flutter_tanstack_query.svg" alt="pub package"></a>
+  <a href="https://pub.dev/packages/flutter_tanstack_query/score"><img src="https://badges.bar/flutter_tanstack_query/popularity" alt="popularity"></a>
+  <a href="https://pub.dev/packages/flutter_tanstack_query/score"><img src="https://badges.bar/flutter_tanstack_query/likes" alt="likes"></a>
+  <a href="https://pub.dev/packages/flutter_tanstack_query/score"><img src="https://badges.bar/flutter_tanstack_query/pub%20points" alt="pub points"></a>
+</p>
+
+<p align="center">
+  <strong>A powerful, feature-rich data fetching and state management package for Flutter</strong>
+</p>
+
+<p align="center">
+  <em>Inspired by TanStack Query (React Query) • Built with clean architecture principles</em>
+</p>
 
 A powerful, feature-rich data fetching and state management package for Flutter, inspired by **TanStack Query (React Query)**. Built with clean architecture principles, it provides automatic caching, background updates, offline support, and optimistic UI updates out of the box.
 
