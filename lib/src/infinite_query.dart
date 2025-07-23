@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'core/query_state.dart';
 import 'core/query_config.dart';
 import 'core/types.dart';
 import 'query_cache.dart';

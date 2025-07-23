@@ -813,6 +813,644 @@ void main() {
 }
 ```
 
+## 🏗️ Clean Architecture Integration
+
+Flutter TanStack Query works seamlessly with clean architecture and popular state management solutions. Here's how to combine them effectively:
+
+### 🧊 With Flutter BLoC
+
+Perfect for separating business logic while leveraging TanStack Query for data fetching.
+
+#### **Project Structure:**
+
+```text
+lib/
+├── core/
+│   ├── error/
+│   │   └── failures.dart
+│   └── usecases/
+│       └── usecase.dart
+├── data/
+│   ├── datasources/
+│   │   ├── user_remote_datasource.dart
+│   │   └── user_local_datasource.dart
+│   ├── models/
+│   │   └── user_model.dart
+│   └── repositories/
+│       └── user_repository_impl.dart
+├── domain/
+│   ├── entities/
+│   │   └── user.dart
+│   ├── repositories/
+│   │   └── user_repository.dart
+│   └── usecases/
+│       ├── get_users.dart
+│       └── create_user.dart
+└── presentation/
+    ├── bloc/
+    │   └── user_form_bloc.dart
+    ├── pages/
+    │   └── user_page.dart
+    └── widgets/
+        └── user_list_widget.dart
+```
+
+#### **Domain Layer:**
+
+```dart
+// domain/entities/user.dart
+class User extends Equatable {
+  final int id;
+  final String name;
+  final String email;
+  final String avatar;
+
+  const User({
+    required this.id,
+    required this.name,
+    required this.email,
+    required this.avatar,
+  });
+
+  @override
+  List<Object> get props => [id, name, email, avatar];
+}
+
+// domain/repositories/user_repository.dart
+abstract class UserRepository {
+  Future<List<User>> getUsers();
+  Future<User> createUser(String name, String email);
+  Future<User> updateUser(int id, String name, String email);
+  Future<void> deleteUser(int id);
+}
+
+// domain/usecases/get_users.dart
+class GetUsers implements UseCase<List<User>, NoParams> {
+  final UserRepository repository;
+
+  GetUsers(this.repository);
+
+  @override
+  Future<List<User>> call(NoParams params) async {
+    return await repository.getUsers();
+  }
+}
+```
+
+#### **Data Layer:**
+
+```dart
+// data/models/user_model.dart
+class UserModel extends User {
+  const UserModel({
+    required super.id,
+    required super.name,
+    required super.email,
+    required super.avatar,
+  });
+
+  factory UserModel.fromJson(Map<String, dynamic> json) {
+    return UserModel(
+      id: json['id'],
+      name: json['name'],
+      email: json['email'],
+      avatar: json['avatar'] ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'email': email,
+      'avatar': avatar,
+    };
+  }
+}
+
+// data/repositories/user_repository_impl.dart
+class UserRepositoryImpl implements UserRepository {
+  final UserRemoteDataSource remoteDataSource;
+  final UserLocalDataSource localDataSource;
+
+  UserRepositoryImpl({
+    required this.remoteDataSource,
+    required this.localDataSource,
+  });
+
+  @override
+  Future<List<User>> getUsers() async {
+    return await remoteDataSource.getUsers();
+  }
+
+  @override
+  Future<User> createUser(String name, String email) async {
+    return await remoteDataSource.createUser(name, email);
+  }
+}
+```
+
+#### **Presentation Layer - Combining BLoC + TanStack Query:**
+
+```dart
+// presentation/bloc/user_form_bloc.dart
+class UserFormBloc extends Bloc<UserFormEvent, UserFormState> {
+  UserFormBloc() : super(UserFormInitial()) {
+    on<UserFormNameChanged>(_onNameChanged);
+    on<UserFormEmailChanged>(_onEmailChanged);
+    on<UserFormValidationRequested>(_onValidationRequested);
+    on<UserFormReset>(_onReset);
+  }
+
+  void _onNameChanged(UserFormNameChanged event, Emitter<UserFormState> emit) {
+    emit(UserFormUpdated(
+      name: event.name,
+      email: state is UserFormUpdated ? (state as UserFormUpdated).email : '',
+      isValid: _isValid(event.name, state is UserFormUpdated ? (state as UserFormUpdated).email : ''),
+    ));
+  }
+
+  void _onEmailChanged(UserFormEmailChanged event, Emitter<UserFormState> emit) {
+    emit(UserFormUpdated(
+      name: state is UserFormUpdated ? (state as UserFormUpdated).name : '',
+      email: event.email,
+      isValid: _isValid(state is UserFormUpdated ? (state as UserFormUpdated).name : '', event.email),
+    ));
+  }
+
+  bool _isValid(String name, String email) {
+    return name.isNotEmpty && email.isNotEmpty && email.contains('@');
+  }
+}
+
+// presentation/pages/user_page.dart
+class UserPage extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (_) => UserFormBloc(),
+      child: Scaffold(
+        appBar: AppBar(title: Text('Users')),
+        body: Column(
+          children: [
+            // TanStack Query handles data fetching
+            Expanded(
+              flex: 2,
+              child: UseQuery<List<User>>(
+                options: QueryOptions<List<User>>(
+                  queryKey: ['users'],
+                  queryFn: () => GetIt.instance<GetUsers>()(NoParams()),
+                  staleTime: Duration(minutes: 5),
+                ),
+                builder: (context, result) {
+                  if (result.isLoading) return Center(child: CircularProgressIndicator());
+                  if (result.isError) return Text('Error: ${result.error}');
+                  
+                  return ListView.builder(
+                    itemCount: result.data?.length ?? 0,
+                    itemBuilder: (context, index) {
+                      final user = result.data![index];
+                      return ListTile(
+                        title: Text(user.name),
+                        subtitle: Text(user.email),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+            
+            // BLoC handles form state
+            Expanded(
+              child: BlocBuilder<UserFormBloc, UserFormState>(
+                builder: (context, state) {
+                  return UserFormWidget(state: state);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+### 🎣 With Riverpod
+
+Excellent combination for modern reactive programming with clean architecture.
+
+#### **Providers Setup:**
+
+```dart
+// presentation/providers/user_providers.dart
+// Repository provider
+final userRepositoryProvider = Provider<UserRepository>((ref) {
+  return UserRepositoryImpl(
+    remoteDataSource: UserRemoteDataSourceImpl(),
+    localDataSource: UserLocalDataSourceImpl(),
+  );
+});
+
+// Use case providers
+final getUsersProvider = Provider<GetUsers>((ref) {
+  return GetUsers(ref.watch(userRepositoryProvider));
+});
+
+final createUserProvider = Provider<CreateUser>((ref) {
+  return CreateUser(ref.watch(userRepositoryProvider));
+});
+
+// Form state provider
+final userFormProvider = StateNotifierProvider<UserFormNotifier, UserFormState>((ref) {
+  return UserFormNotifier();
+});
+
+// presentation/notifiers/user_form_notifier.dart
+class UserFormNotifier extends StateNotifier<UserFormState> {
+  UserFormNotifier() : super(UserFormState.initial());
+
+  void updateName(String name) {
+    state = state.copyWith(
+      name: name,
+      isValid: _isValid(name, state.email),
+    );
+  }
+
+  void updateEmail(String email) {
+    state = state.copyWith(
+      email: email,
+      isValid: _isValid(state.name, email),
+    );
+  }
+
+  void reset() {
+    state = UserFormState.initial();
+  }
+
+  bool _isValid(String name, String email) {
+    return name.isNotEmpty && email.isNotEmpty && email.contains('@');
+  }
+}
+
+@freezed
+class UserFormState with _$UserFormState {
+  const factory UserFormState({
+    required String name,
+    required String email,
+    required bool isValid,
+  }) = _UserFormState;
+
+  factory UserFormState.initial() => UserFormState(
+    name: '',
+    email: '',
+    isValid: false,
+  );
+}
+```
+
+#### **Riverpod UI Implementation:**
+
+```dart
+// presentation/pages/user_page_riverpod.dart
+class UserPageRiverpod extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final formState = ref.watch(userFormProvider);
+    
+    return Scaffold(
+      appBar: AppBar(title: Text('Users with Riverpod')),
+      body: Column(
+        children: [
+          // TanStack Query for data fetching
+          Expanded(
+            flex: 2,
+            child: UseQuery<List<User>>(
+              options: QueryOptions<List<User>>(
+                queryKey: ['users'],
+                queryFn: () => ref.read(getUsersProvider)(NoParams()),
+                staleTime: Duration(minutes: 5),
+              ),
+              builder: (context, result) {
+                if (result.isLoading) return Center(child: CircularProgressIndicator());
+                if (result.isError) return Text('Error: ${result.error}');
+                
+                return ListView.builder(
+                  itemCount: result.data?.length ?? 0,
+                  itemBuilder: (context, index) {
+                    final user = result.data![index];
+                    return ListTile(
+                      title: Text(user.name),
+                      subtitle: Text(user.email),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          
+          // Riverpod for form state + TanStack Query for mutation
+          Expanded(
+            child: UseMutation<User, CreateUserRequest>(
+              options: MutationOptions<User, CreateUserRequest>(
+                mutationFn: (request) => ref.read(createUserProvider)(
+                  CreateUserParams(name: request.name, email: request.email),
+                ),
+                onSuccess: (user, variables) {
+                  ref.read(userFormProvider.notifier).reset();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('User ${user.name} created!')),
+                  );
+                },
+                invalidateQueries: [['users']],
+              ),
+              builder: (context, mutation) {
+                return Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      TextField(
+                        decoration: InputDecoration(labelText: 'Name'),
+                        onChanged: (value) => ref.read(userFormProvider.notifier).updateName(value),
+                      ),
+                      TextField(
+                        decoration: InputDecoration(labelText: 'Email'),
+                        onChanged: (value) => ref.read(userFormProvider.notifier).updateEmail(value),
+                      ),
+                      SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: formState.isValid && !mutation.isLoading
+                            ? () {
+                                mutation.mutate(CreateUserRequest(
+                                  name: formState.name,
+                                  email: formState.email,
+                                ));
+                              }
+                            : null,
+                        child: mutation.isLoading 
+                            ? CircularProgressIndicator()
+                            : Text('Create User'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+
+### 📱 With GetX
+
+Great for rapid development with reactive programming and dependency injection.
+
+#### **Controllers and Bindings:**
+
+```dart
+// presentation/controllers/user_form_controller.dart
+class UserFormController extends GetxController {
+  final UserRepository _userRepository = Get.find<UserRepository>();
+  
+  // Form state
+  final name = ''.obs;
+  final email = ''.obs;
+  final isLoading = false.obs;
+  
+  // Computed properties
+  bool get isValid => name.value.isNotEmpty && 
+                     email.value.isNotEmpty && 
+                     email.value.contains('@');
+
+  void updateName(String value) {
+    name.value = value;
+  }
+
+  void updateEmail(String value) {
+    email.value = value;
+  }
+
+  void reset() {
+    name.value = '';
+    email.value = '';
+  }
+}
+
+// presentation/bindings/user_binding.dart
+class UserBinding extends Bindings {
+  @override
+  void dependencies() {
+    Get.lazyPut<UserRemoteDataSource>(() => UserRemoteDataSourceImpl());
+    Get.lazyPut<UserLocalDataSource>(() => UserLocalDataSourceImpl());
+    Get.lazyPut<UserRepository>(() => UserRepositoryImpl(
+      remoteDataSource: Get.find(),
+      localDataSource: Get.find(),
+    ));
+    Get.lazyPut<GetUsers>(() => GetUsers(Get.find()));
+    Get.lazyPut<CreateUser>(() => CreateUser(Get.find()));
+    Get.lazyPut(() => UserFormController());
+  }
+}
+```
+
+#### **GetX UI Implementation:**
+
+```dart
+// presentation/pages/user_page_getx.dart
+class UserPageGetX extends GetView<UserFormController> {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Users with GetX')),
+      body: Column(
+        children: [
+          // TanStack Query for data fetching
+          Expanded(
+            flex: 2,
+            child: UseQuery<List<User>>(
+              options: QueryOptions<List<User>>(
+                queryKey: ['users'],
+                queryFn: () => Get.find<GetUsers>()(NoParams()),
+                staleTime: Duration(minutes: 5),
+              ),
+              builder: (context, result) {
+                if (result.isLoading) return Center(child: CircularProgressIndicator());
+                if (result.isError) return Text('Error: ${result.error}');
+                
+                return ListView.builder(
+                  itemCount: result.data?.length ?? 0,
+                  itemBuilder: (context, index) {
+                    final user = result.data![index];
+                    return ListTile(
+                      title: Text(user.name),
+                      subtitle: Text(user.email),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          
+          // GetX for form state + TanStack Query for mutation
+          Expanded(
+            child: UseMutation<User, CreateUserRequest>(
+              options: MutationOptions<User, CreateUserRequest>(
+                mutationFn: (request) => Get.find<CreateUser>()(
+                  CreateUserParams(name: request.name, email: request.email),
+                ),
+                onSuccess: (user, variables) {
+                  controller.reset();
+                  Get.snackbar(
+                    'Success',
+                    'User ${user.name} created!',
+                    snackPosition: SnackPosition.BOTTOM,
+                  );
+                },
+                invalidateQueries: [['users']],
+              ),
+              builder: (context, mutation) {
+                return Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      Obx(() => TextField(
+                        decoration: InputDecoration(
+                          labelText: 'Name',
+                          errorText: controller.name.value.isEmpty ? 'Name is required' : null,
+                        ),
+                        onChanged: controller.updateName,
+                      )),
+                      Obx(() => TextField(
+                        decoration: InputDecoration(
+                          labelText: 'Email',
+                          errorText: !controller.email.value.contains('@') && 
+                                   controller.email.value.isNotEmpty 
+                              ? 'Invalid email' 
+                              : null,
+                        ),
+                        onChanged: controller.updateEmail,
+                      )),
+                      SizedBox(height: 16),
+                      Obx(() => ElevatedButton(
+                        onPressed: controller.isValid && !mutation.isLoading
+                            ? () {
+                                mutation.mutate(CreateUserRequest(
+                                  name: controller.name.value,
+                                  email: controller.email.value,
+                                ));
+                              }
+                            : null,
+                        child: mutation.isLoading 
+                            ? CircularProgressIndicator()
+                            : Text('Create User'),
+                      )),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+
+### 🎯 Architecture Best Practices
+
+#### **1. Separation of Concerns:**
+
+```dart
+// ✅ Good - Clear separation
+// TanStack Query: API calls, caching, background updates
+// BLoC/Riverpod/GetX: UI state, form validation, navigation
+// Repository: Business logic and data transformation
+
+// ❌ Avoid - Mixing concerns
+// Don't put form validation in TanStack Query
+// Don't put API calls in BLoC/Riverpod/GetX
+```
+
+#### **2. Dependency Injection Setup:**
+
+```dart
+// Using get_it for dependency injection
+void setupDependencies() {
+  // Data sources
+  GetIt.instance.registerLazySingleton<UserRemoteDataSource>(
+    () => UserRemoteDataSourceImpl(),
+  );
+  
+  // Repositories
+  GetIt.instance.registerLazySingleton<UserRepository>(
+    () => UserRepositoryImpl(
+      remoteDataSource: GetIt.instance(),
+      localDataSource: GetIt.instance(),
+    ),
+  );
+  
+  // Use cases
+  GetIt.instance.registerLazySingleton(() => GetUsers(GetIt.instance()));
+  GetIt.instance.registerLazySingleton(() => CreateUser(GetIt.instance()));
+}
+```
+
+#### **3. Error Handling Strategy:**
+
+```dart
+// Custom error handling that works with both systems
+class AppErrorHandler {
+  static void handleQueryError(Object error, {
+    required BuildContext context,
+    VoidCallback? onRetry,
+  }) {
+    if (error is NetworkException) {
+      _showNetworkError(context, onRetry);
+    } else if (error is ValidationException) {
+      _showValidationError(context, error.message);
+    } else {
+      _showGenericError(context, onRetry);
+    }
+  }
+  
+  static void handleBlocError(BlocBase bloc, Object error) {
+    // Handle BLoC-specific errors
+    if (error is FormValidationError) {
+      // Handle form validation
+    }
+  }
+}
+```
+
+#### **4. Key Benefits of This Approach:**
+
+- **🎯 Clear Separation**: TanStack Query handles server state, your chosen state management handles client state
+- **🚀 Best of Both Worlds**: Automatic caching + reactive UI updates
+- **🏗️ Scalable Architecture**: Easy to test, maintain, and extend
+- **⚡ Performance**: Optimized data fetching with intelligent UI updates
+- **🔄 Consistency**: Same patterns across different state management solutions
+
+#### **5. When to Use Each Solution:**
+
+- **BLoC**: When you need predictable state management with events and states
+- **Riverpod**: For modern reactive programming with excellent provider ecosystem
+- **GetX**: For rapid development with built-in dependency injection and routing
+
+## 👨‍💻 Author
+
+**Haraprosad Biswas** - *Creator & Maintainer*
+
+- 🐱 **GitHub**: [@Haraprosad](https://github.com/Haraprosad)
+- 💼 **LinkedIn**: [Connect with me](https://www.linkedin.com/in/haraprosadbiswas/)
+- 📧 **Email**: [dev.haraprosad@gmail.com](mailto:dev.haraprosad@gmail.com)
+- 🌐 **Portfolio**: [@haraprosad](https://portfolio-website-2f800.web.app/)
+
+*"Bringing the power of TanStack Query to the Flutter ecosystem - one query at a time!"*
+
 ## 🤝 Contributing
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
@@ -821,12 +1459,13 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+**Copyright (c) 2025 Haraprosad Biswas**
+
 ## 🙋‍♂️ Support
 
-- 📚 [Documentation](https://github.com/your-repo/flutter_tanstack_query/wiki)
-- 🐛 [Issues](https://github.com/your-repo/flutter_tanstack_query/issues)
-- 💬 [Discussions](https://github.com/your-repo/flutter_tanstack_query/discussions)
-- 📧 [Email Support](mailto:support@flutter-tanstack-query.dev)
+- 📚 [Documentation](https://github.com/Haraprosad/flutter_tanstack_query)
+- 🐛 [Issues](https://github.com/Haraprosad/flutter_tanstack_query/issues)
+- 📧 [Email Support](mailto:dev.haraprosad@gmail.com)
 
 ## 🎯 Roadmap
 
@@ -840,4 +1479,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-Made with ❤️ for the Flutter community
+Made with ❤️ by **Haraprosad Biswas** for the Flutter community
+
+Copyright (c) 2025 Haraprosad Biswas
