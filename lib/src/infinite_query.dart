@@ -35,10 +35,8 @@ class InfiniteQueryState<T> {
     this.hasNextPage = false,
   });
 
-  factory InfiniteQueryState.idle() => const InfiniteQueryState._(
-        status: QueryStatus.idle,
-        isStale: false,
-      );
+  factory InfiniteQueryState.idle() =>
+      const InfiniteQueryState._(status: QueryStatus.idle, isStale: false);
 
   factory InfiniteQueryState.loading([List<QueryPage<T>>? previousPages]) =>
       InfiniteQueryState._(
@@ -47,24 +45,27 @@ class InfiniteQueryState<T> {
         isStale: previousPages != null,
       );
 
-  factory InfiniteQueryState.success(List<QueryPage<T>> pages,
-          {bool isStale = false, bool hasNextPage = false}) =>
-      InfiniteQueryState._(
-        pages: pages,
-        status: QueryStatus.success,
-        isStale: isStale,
-        lastFetched: DateTime.now(),
-        hasNextPage: hasNextPage,
-      );
+  factory InfiniteQueryState.success(
+    List<QueryPage<T>> pages, {
+    bool isStale = false,
+    bool hasNextPage = false,
+  }) => InfiniteQueryState._(
+    pages: pages,
+    status: QueryStatus.success,
+    isStale: isStale,
+    lastFetched: DateTime.now(),
+    hasNextPage: hasNextPage,
+  );
 
-  factory InfiniteQueryState.error(Object error,
-          [List<QueryPage<T>>? previousPages]) =>
-      InfiniteQueryState._(
-        pages: previousPages ?? [],
-        error: error,
-        status: QueryStatus.error,
-        isStale: previousPages != null,
-      );
+  factory InfiniteQueryState.error(
+    Object error, [
+    List<QueryPage<T>>? previousPages,
+  ]) => InfiniteQueryState._(
+    pages: previousPages ?? [],
+    error: error,
+    status: QueryStatus.error,
+    isStale: previousPages != null,
+  );
 
   InfiniteQueryState<T> copyWith({
     List<QueryPage<T>>? pages,
@@ -109,23 +110,20 @@ class InfiniteQueryState<T> {
 
   @override
   int get hashCode => Object.hash(
-      Object.hashAll(pages),
-      error,
-      status,
-      isStale,
-      lastFetched,
-      isFetchingNextPage,
-      hasNextPage);
+    Object.hashAll(pages),
+    error,
+    status,
+    isStale,
+    lastFetched,
+    isFetchingNextPage,
+    hasNextPage,
+  );
 
   @override
   String toString() {
     return 'InfiniteQueryState(pages: ${pages.length}, error: $error, status: $status, isStale: $isStale, isFetchingNextPage: $isFetchingNextPage, hasNextPage: $hasNextPage)';
   }
 }
-
-typedef InfiniteQueryFetcher<T, PageParam> = Future<T> Function({PageParam? pageParam});
-typedef GetNextPageParam<T, PageParam> = PageParam? Function(T lastPage, List<T> allPages);
-typedef GetPreviousPageParam<T, PageParam> = PageParam? Function(T firstPage, List<T> allPages);
 
 /// Manages the state and lifecycle of an infinite (paginated) data query.
 class InfiniteQuery<T, PageParam> {
@@ -154,9 +152,9 @@ class InfiniteQuery<T, PageParam> {
     this.getNextPageParam,
     this.getPreviousPageParam,
     this.config = const QueryConfig(),
-  })  : _cache = cache,
-        _networkPolicy = networkPolicy,
-        _state = InfiniteQueryState.idle() {
+  }) : _cache = cache,
+       _networkPolicy = networkPolicy,
+       _state = InfiniteQueryState.idle() {
     _initialize();
   }
 
@@ -173,10 +171,18 @@ class InfiniteQuery<T, PageParam> {
 
   void _initialize() async {
     // Attempt to load from cache immediately
-    final cachedData = await _cache.get<List<QueryPage<T>>>(queryKey.toString());
+    final cachedData = await _cache.get<List<QueryPage<T>>>(
+      queryKey.toString(),
+    );
     if (cachedData != null && cachedData.isNotEmpty) {
       final isStale = _isStale(cachedData);
-      _updateState(InfiniteQueryState.success(cachedData, isStale: isStale, hasNextPage: _calculateHasNextPage(cachedData)));
+      _updateState(
+        InfiniteQueryState.success(
+          cachedData,
+          isStale: isStale,
+          hasNextPage: _calculateHasNextPage(cachedData),
+        ),
+      );
       if (isStale && config.enabled) {
         _fetchInBackground();
       }
@@ -188,7 +194,9 @@ class InfiniteQuery<T, PageParam> {
 
     if (config.refetchOnReconnect) {
       _networkSubscription = _networkPolicy.statusStream.listen((status) {
-        if (status == NetworkStatus.online && state.hasData && _isStale(state.pages)) {
+        if (status == NetworkStatus.online &&
+            state.hasData &&
+            _isStale(state.pages)) {
           debugPrint('Refetching ${queryKey.toString()} on reconnect.');
           refetch();
         }
@@ -211,14 +219,18 @@ class InfiniteQuery<T, PageParam> {
 
     try {
       final firstPageData = await _fetchWithRetry(pageParam: initialPageParam);
-      final newPages = [QueryPage(data: firstPageData, pageParam: initialPageParam)];
-      
+      final newPages = [
+        QueryPage(data: firstPageData, pageParam: initialPageParam),
+      ];
+
       await _cache.set(queryKey.toString(), newPages, ttl: config.cacheTime);
       if (!_disposed) {
-        _updateState(InfiniteQueryState.success(
-          newPages,
-          hasNextPage: _calculateHasNextPage(newPages),
-        ));
+        _updateState(
+          InfiniteQueryState.success(
+            newPages,
+            hasNextPage: _calculateHasNextPage(newPages),
+          ),
+        );
       }
     } catch (error) {
       debugPrint('Error fetching ${queryKey.toString()}: $error');
@@ -229,7 +241,10 @@ class InfiniteQuery<T, PageParam> {
   }
 
   Future<void> fetchNextPage() async {
-    if (_disposed || !config.enabled || state.isFetchingNextPage || !state.hasNextPage) {
+    if (_disposed ||
+        !config.enabled ||
+        state.isFetchingNextPage ||
+        !state.hasNextPage) {
       return;
     }
 
@@ -249,21 +264,76 @@ class InfiniteQuery<T, PageParam> {
       final updatedPages = List<QueryPage<T>>.from(state.pages)
         ..add(QueryPage(data: newPageData, pageParam: nextPageParam));
 
-      await _cache.set(queryKey.toString(), updatedPages, ttl: config.cacheTime);
+      await _cache.set(
+        queryKey.toString(),
+        updatedPages,
+        ttl: config.cacheTime,
+      );
       if (!_disposed) {
-        _updateState(InfiniteQueryState.success(
-          updatedPages,
-          hasNextPage: _calculateHasNextPage(updatedPages),
-        ).copyWith(isFetchingNextPage: false));
+        _updateState(
+          InfiniteQueryState.success(
+            updatedPages,
+            hasNextPage: _calculateHasNextPage(updatedPages),
+          ).copyWith(isFetchingNextPage: false),
+        );
       }
     } catch (error) {
       debugPrint('Error fetching next page for ${queryKey.toString()}: $error');
       if (!_disposed) {
-        _updateState(state.copyWith(
-          error: error,
-          isFetchingNextPage: false,
-          isStale: true, // Mark stale if pagination fails
-        ));
+        _updateState(
+          state.copyWith(
+            error: error,
+            isFetchingNextPage: false,
+            isStale: true, // Mark stale if pagination fails
+          ),
+        );
+      }
+    }
+  }
+
+  /// Fetches the previous page of data
+  Future<void> fetchPreviousPage() async {
+    if (_disposed || !config.enabled || state.pages.isEmpty) {
+      return;
+    }
+
+    final firstPage = state.pages.first.data;
+    final allPagesData = state.pages.map((p) => p.data).toList();
+    final previousPageParam = getPreviousPageParam?.call(
+      firstPage,
+      allPagesData,
+    );
+
+    if (previousPageParam == null) {
+      return;
+    }
+
+    try {
+      final newPageData = await _fetchWithRetry(pageParam: previousPageParam);
+      final updatedPages = <QueryPage<T>>[
+        QueryPage(data: newPageData, pageParam: previousPageParam),
+        ...state.pages,
+      ];
+
+      await _cache.set(
+        queryKey.toString(),
+        updatedPages,
+        ttl: config.cacheTime,
+      );
+      if (!_disposed) {
+        _updateState(
+          InfiniteQueryState.success(
+            updatedPages,
+            hasNextPage: _calculateHasNextPage(updatedPages),
+          ),
+        );
+      }
+    } catch (error) {
+      debugPrint(
+        'Error fetching previous page for ${queryKey.toString()}: $error',
+      );
+      if (!_disposed) {
+        _updateState(state.copyWith(error: error, isStale: true));
       }
     }
   }
@@ -280,7 +350,9 @@ class InfiniteQuery<T, PageParam> {
       } catch (error) {
         lastError = error;
         attempts++;
-        debugPrint('Fetch failed for ${queryKey.toString()}. Attempt ${attempts}/${config.retryCount + 1}. Error: $error');
+        debugPrint(
+          'Fetch failed for ${queryKey.toString()}. Attempt ${attempts}/${config.retryCount + 1}. Error: $error',
+        );
         if (attempts <= config.retryCount) {
           await Future.delayed(config.retryDelay * attempts);
         }
@@ -294,9 +366,11 @@ class InfiniteQuery<T, PageParam> {
     debugPrint('Background refetching ${queryKey.toString()}...');
     try {
       // For infinite queries, background refetch usually means refetching the first page
-      final firstPageData = await _fetchWithRetry(pageParam: null); // Assuming initial page param is null
+      final firstPageData = await _fetchWithRetry(
+        pageParam: null,
+      ); // Assuming initial page param is null
       final newPages = [QueryPage(data: firstPageData, pageParam: null)];
-      
+
       // If there are more pages, you might want to refetch them too,
       // or rely on the user scrolling to trigger fetchNextPage.
       // For simplicity, background refetch only refreshes the first page.
@@ -304,20 +378,26 @@ class InfiniteQuery<T, PageParam> {
       await _cache.set(queryKey.toString(), newPages, ttl: config.cacheTime);
       if (!_disposed) {
         if (state.status != QueryStatus.loading) {
-          _updateState(InfiniteQueryState.success(
-            newPages,
-            hasNextPage: _calculateHasNextPage(newPages),
-          ));
+          _updateState(
+            InfiniteQueryState.success(
+              newPages,
+              hasNextPage: _calculateHasNextPage(newPages),
+            ),
+          );
         } else {
-          _updateState(state.copyWith(
-            pages: newPages,
-            isStale: false,
-            hasNextPage: _calculateHasNextPage(newPages),
-          ));
+          _updateState(
+            state.copyWith(
+              pages: newPages,
+              isStale: false,
+              hasNextPage: _calculateHasNextPage(newPages),
+            ),
+          );
         }
       }
     } catch (error) {
-      debugPrint('Background refetch failed for ${queryKey.toString()}: $error');
+      debugPrint(
+        'Background refetch failed for ${queryKey.toString()}: $error',
+      );
       if (!_disposed) {
         _updateState(state.copyWith(isStale: true));
       }
@@ -348,7 +428,12 @@ class InfiniteQuery<T, PageParam> {
   }
 
   void setData(List<QueryPage<T>> pages) {
-    _updateState(InfiniteQueryState.success(pages, hasNextPage: _calculateHasNextPage(pages)));
+    _updateState(
+      InfiniteQueryState.success(
+        pages,
+        hasNextPage: _calculateHasNextPage(pages),
+      ),
+    );
     _cache.set(queryKey.toString(), pages, ttl: config.cacheTime);
     debugPrint('InfiniteQuery ${queryKey.toString()} data manually set.');
   }

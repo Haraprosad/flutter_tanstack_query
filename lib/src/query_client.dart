@@ -6,6 +6,7 @@ import 'query.dart';
 import 'infinite_query.dart';
 import 'mutation.dart';
 import 'core/query_config.dart';
+import 'core/types.dart';
 
 /// The central client for managing all queries and mutations.
 ///
@@ -23,10 +24,7 @@ class QueryClient {
   /// Creates a [QueryClient] instance.
   ///
   /// Requires instances of [QueryCache] and [NetworkPolicy].
-  QueryClient({
-    required this.cache,
-    required this.networkPolicy,
-  });
+  QueryClient({required this.cache, required this.networkPolicy});
 
   /// Retrieves or creates a [Query] instance.
   ///

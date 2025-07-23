@@ -26,7 +26,7 @@ class NetworkPolicy {
   NetworkPolicy._();
 
   final Connectivity _connectivity = Connectivity();
-  StreamSubscription<ConnectivityResult>? _subscription;
+  StreamSubscription<List<ConnectivityResult>>? _subscription;
   NetworkStatus _status = NetworkStatus.unknown;
 
   /// A broadcast stream that emits the current [NetworkStatus] whenever it changes.
@@ -52,8 +52,8 @@ class NetworkPolicy {
   Future<void> initialize() async {
     // Check initial connectivity
     try {
-      final result = await _connectivity.checkConnectivity();
-      _updateStatus(result);
+      final results = await _connectivity.checkConnectivity();
+      _updateStatus(results);
     } catch (e) {
       debugPrint('Error checking initial connectivity: $e');
       _status = NetworkStatus.unknown; // Fallback to unknown on error
@@ -65,8 +65,9 @@ class NetworkPolicy {
   }
 
   /// Internal method to update the network status and notify listeners.
-  void _updateStatus(ConnectivityResult result) {
-    final newStatus = result == ConnectivityResult.none
+  void _updateStatus(List<ConnectivityResult> results) {
+    // Consider connected if any connection is available
+    final newStatus = results.contains(ConnectivityResult.none)
         ? NetworkStatus.offline
         : NetworkStatus.online;
 
@@ -80,8 +81,8 @@ class NetworkPolicy {
   /// Manually checks and returns the current connectivity status.
   Future<bool> checkConnectivity() async {
     try {
-      final result = await _connectivity.checkConnectivity();
-      _updateStatus(result);
+      final results = await _connectivity.checkConnectivity();
+      _updateStatus(results);
       return isOnline;
     } catch (e) {
       debugPrint('Error checking connectivity: $e');

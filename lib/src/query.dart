@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'core/query_state.dart';
 import 'core/query_config.dart';
 import 'core/types.dart';
+import 'core/app_lifecycle_manager.dart';
 import 'query_cache.dart';
 import 'network_policy.dart';
-
-typedef QueryFetcher<T> = Future<T> Function();
 
 /// Manages the state and lifecycle of a single data query.
 ///
@@ -33,6 +33,7 @@ class Query<T> {
   QueryState<T> _state;
 
   StreamSubscription? _networkSubscription;
+  StreamSubscription? _lifecycleSubscription;
   bool _disposed = false;
 
   /// Creates a [Query] instance.
@@ -42,9 +43,9 @@ class Query<T> {
     required QueryCache cache,
     required NetworkPolicy networkPolicy,
     this.config = const QueryConfig(),
-  })  : _cache = cache,
-        _networkPolicy = networkPolicy,
-        _state = QueryState.idle() {
+  }) : _cache = cache,
+       _networkPolicy = networkPolicy,
+       _state = QueryState.idle() {
     _initialize();
   }
 
@@ -84,14 +85,27 @@ class Query<T> {
     // Listen to network changes for refetch on reconnect
     if (config.refetchOnReconnect) {
       _networkSubscription = _networkPolicy.statusStream.listen((status) {
-        if (status == NetworkStatus.online && state.hasData && _isStale(state.data!)) {
+        if (status == NetworkStatus.online &&
+            state.hasData &&
+            _isStale(state.data!)) {
           debugPrint('Refetching ${queryKey.toString()} on reconnect.');
           refetch();
         }
       });
     }
 
-    // TODO: Implement refetchOnWindowFocus (requires AppLifecycleObserver)
+    // Listen to app lifecycle changes for refetch on focus
+    if (config.refetchOnWindowFocus) {
+      _lifecycleSubscription = AppLifecycleManager.instance.lifecycleStream
+          .listen((lifecycle) {
+            if (lifecycle == AppLifecycleState.resumed &&
+                state.hasData &&
+                _isStale(state.data!)) {
+              debugPrint('Refetching ${queryKey.toString()} on window focus.');
+              refetch();
+            }
+          });
+    }
   }
 
   /// Fetches data for the query.
@@ -144,9 +158,14 @@ class Query<T> {
       } catch (error) {
         lastError = error;
         attempts++;
-        debugPrint('Fetch failed for ${queryKey.toString()}. Attempt ${attempts}/${config.retryCount + 1}. Error: $error');
+        debugPrint(
+          'Fetch failed for ${queryKey.toString()}. Attempt ${attempts}/${config.retryCount + 1}. Error: $error',
+        );
+
         if (attempts <= config.retryCount) {
-          await Future.delayed(config.retryDelay * attempts); // Exponential backoff
+          // Calculate delay with exponential backoff
+          final delay = config.retryDelay * attempts;
+          await Future.delayed(delay);
         }
       }
     }
@@ -171,9 +190,13 @@ class Query<T> {
       }
     } catch (error) {
       // Silent fail for background refetch, only log the error
-      debugPrint('Background refetch failed for ${queryKey.toString()}: $error');
+      debugPrint(
+        'Background refetch failed for ${queryKey.toString()}: $error',
+      );
       if (!_disposed) {
-        _updateState(state.copyWith(isStale: true)); // Keep stale if background fetch fails
+        _updateState(
+          state.copyWith(isStale: true),
+        ); // Keep stale if background fetch fails
       }
     }
   }
@@ -209,6 +232,7 @@ class Query<T> {
   void dispose() {
     _disposed = true;
     _networkSubscription?.cancel();
+    _lifecycleSubscription?.cancel();
     _stateController.close();
     debugPrint('Query ${queryKey.toString()} disposed.');
   }
