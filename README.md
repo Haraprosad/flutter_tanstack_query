@@ -6,9 +6,9 @@
 
 <p align="center">
   <a href="https://pub.dev/packages/flutter_tanstack_query"><img src="https://img.shields.io/pub/v/flutter_tanstack_query.svg" alt="pub package"></a>
-  <a href="https://pub.dev/packages/flutter_tanstack_query/score"><img src="https://badges.bar/flutter_tanstack_query/popularity" alt="popularity"></a>
-  <a href="https://pub.dev/packages/flutter_tanstack_query/score"><img src="https://badges.bar/flutter_tanstack_query/likes" alt="likes"></a>
-  <a href="https://pub.dev/packages/flutter_tanstack_query/score"><img src="https://badges.bar/flutter_tanstack_query/pub%20points" alt="pub points"></a>
+  <a href="https://pub.dev/packages/flutter_tanstack_query"><img src="https://img.shields.io/pub/points/flutter_tanstack_query" alt="pub points"></a>
+  <a href="https://pub.dev/packages/flutter_tanstack_query"><img src="https://img.shields.io/pub/popularity/flutter_tanstack_query" alt="popularity"></a>
+  <a href="https://pub.dev/packages/flutter_tanstack_query"><img src="https://img.shields.io/pub/likes/flutter_tanstack_query" alt="likes"></a>
 </p>
 
 <p align="center">
