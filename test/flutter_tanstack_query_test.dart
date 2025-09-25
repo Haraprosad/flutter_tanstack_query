@@ -1,5 +1,5 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_tanstack_query/flutter_tanstack_query.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('FlutterTanStackQuery', () {

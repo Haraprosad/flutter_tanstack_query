@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'core/query_state.dart';
 import 'core/query_config.dart';
@@ -25,6 +24,11 @@ class Query<T> {
   final QueryCache _cache;
   final NetworkPolicy _networkPolicy;
 
+  // Global event listeners
+  final void Function()? _onSuccess;
+  final void Function(String error)? _onError;
+  final void Function(String error)? _onRefreshError;
+
   /// The stream controller for emitting [QueryState] changes.
   final StreamController<QueryState<T>> _stateController =
       StreamController<QueryState<T>>.broadcast();
@@ -43,9 +47,22 @@ class Query<T> {
     required QueryCache cache,
     required NetworkPolicy networkPolicy,
     this.config = const QueryConfig(),
+    void Function()? onSuccess,
+    void Function(String error)? onError,
+    void Function(String error)? onRefreshError,
   }) : _cache = cache,
        _networkPolicy = networkPolicy,
+       _onSuccess = onSuccess,
+       _onError = onError,
+       _onRefreshError = onRefreshError,
        _state = QueryState.idle() {
+    // Debug: Log listener configuration
+    debugPrint('🔧 Query created with listeners:');
+    debugPrint('  - onSuccess: ${onSuccess != null ? "✅ SET" : "❌ NULL"}');
+    debugPrint('  - onError: ${onError != null ? "✅ SET" : "❌ NULL"}');
+    debugPrint(
+      '  - onRefreshError: ${onRefreshError != null ? "✅ SET" : "❌ NULL"}',
+    );
     _initialize();
   }
 
@@ -58,9 +75,41 @@ class Query<T> {
   /// Updates the internal state and emits it through the stream.
   void _updateState(QueryState<T> newState) {
     if (_disposed) return;
+
+    final oldStatus = _state.status;
+    final newStatus = newState.status;
+
+    // Debug: Log all status changes
+    debugPrint('📊 Query status change: $oldStatus → $newStatus');
+    if (newState.error != null) {
+      debugPrint('📊 Error details: ${newState.error}');
+    }
+
     _state = newState;
     if (!_stateController.isClosed) {
       _stateController.add(_state);
+    }
+
+    // Trigger global listeners on status changes
+    if (oldStatus != newStatus) {
+      debugPrint('🎯 Status actually changed, checking listeners...');
+      switch (newStatus) {
+        case QueryStatus.success:
+          debugPrint('🎯 Triggering onSuccess listener...');
+          _onSuccess?.call();
+          break;
+        case QueryStatus.error:
+          debugPrint('🎯 Triggering onError listener...');
+          if (newState.error != null) {
+            _onError?.call(newState.error.toString());
+          }
+          break;
+        default:
+          debugPrint('🎯 Status is $newStatus, no listener to trigger');
+          break;
+      }
+    } else {
+      debugPrint('🎯 Status unchanged, not triggering listeners');
     }
   }
 
@@ -145,7 +194,16 @@ class Query<T> {
   }
 
   /// Forces a refetch of the query, bypassing cache.
-  Future<void> refetch() => fetch(force: true);
+  Future<void> refetch() async {
+    try {
+      await fetch(force: true);
+    } catch (error) {
+      // Handle refresh-specific error
+      debugPrint('🔄❌ Refresh error for ${queryKey.toString()}: $error');
+      _onRefreshError?.call(error.toString());
+      rethrow;
+    }
+  }
 
   /// Executes the [fetcher] with retry logic.
   Future<T> _fetchWithRetry() async {
@@ -159,7 +217,7 @@ class Query<T> {
         lastError = error;
         attempts++;
         debugPrint(
-          'Fetch failed for ${queryKey.toString()}. Attempt ${attempts}/${config.retryCount + 1}. Error: $error',
+          'Fetch failed for $queryKey. Attempt $attempts/${config.retryCount + 1}. Error: $error',
         );
 
         if (attempts <= config.retryCount) {
@@ -193,6 +251,13 @@ class Query<T> {
       debugPrint(
         'Background refetch failed for ${queryKey.toString()}: $error',
       );
+
+      // Trigger refresh error listener for background refreshes
+      debugPrint(
+        '🔄 Triggering onRefreshError listener for background refresh...',
+      );
+      _onRefreshError?.call(error.toString());
+
       if (!_disposed) {
         _updateState(
           state.copyWith(isStale: true),

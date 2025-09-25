@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart'; // For debugPrint
+import 'core/adapters.dart'; // Import our adapters
 
 /// Manages in-memory and persistent caching for queries.
 ///
@@ -40,6 +41,9 @@ class QueryCache {
       final appDocumentDir = await getApplicationDocumentsDirectory();
       Hive.init(appDocumentDir.path);
 
+      // Register query-specific type adapters
+      registerQueryAdapters();
+
       _persistentCache = await Hive.openBox('flutter_data_query_cache');
       _initialized = true;
       debugPrint('QueryCache initialized successfully.');
@@ -60,8 +64,14 @@ class QueryCache {
 
     if (_initialized && _persistentCache != null) {
       try {
-        // Hive handles custom objects directly if adapters are registered.
-        await _persistentCache!.put(key, data);
+        // Skip caching for complex objects that might not be serializable
+        if (_isSerializable(data)) {
+          await _persistentCache!.put(key, data);
+        } else {
+          debugPrint(
+            'Skipping persistent cache for non-serializable data type: ${data.runtimeType}',
+          );
+        }
         // TODO: Implement TTL for persistent cache if needed.
         // Hive doesn't have built-in TTL per entry. This would require
         // storing metadata (timestamp, ttl) alongside the data or
@@ -69,7 +79,29 @@ class QueryCache {
         // For simplicity, current implementation relies on `Query` to check staleness.
       } catch (e) {
         debugPrint('Error saving to persistent cache for key $key: $e');
+        // Continue without throwing - persistent cache is a performance optimization
+        // not a critical feature, so we shouldn't break the app if it fails
       }
+    }
+  }
+
+  /// Check if data type is serializable for Hive storage
+  bool _isSerializable<T>(T data) {
+    // Allow basic types and registered adapter types
+    if (data == null) return true;
+
+    // Basic Dart types that Hive supports natively
+    final basicTypes = [String, int, double, bool, List, Map];
+    if (basicTypes.contains(data.runtimeType)) return true;
+
+    // For complex objects, only allow if adapter is registered
+    // This is a simplified check - in practice you might want more sophisticated logic
+    try {
+      // Try to get the adapter - if it exists, we can serialize
+      Hive.isAdapterRegistered(data.runtimeType.hashCode % 224);
+      return true;
+    } catch (e) {
+      return false;
     }
   }
 

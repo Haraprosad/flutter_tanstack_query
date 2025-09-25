@@ -16,6 +16,11 @@ class QueryClient {
   final QueryCache cache;
   final NetworkPolicy networkPolicy;
 
+  // Global event listeners
+  void Function(String error)? _onError;
+  void Function()? _onSuccess;
+  void Function(String error)? _onRefreshError;
+
   // Registry for active queries and mutations
   final Map<String, Query> _queries = {};
   final Map<String, InfiniteQuery> _infiniteQueries = {};
@@ -24,7 +29,48 @@ class QueryClient {
   /// Creates a [QueryClient] instance.
   ///
   /// Requires instances of [QueryCache] and [NetworkPolicy].
-  QueryClient({required this.cache, required this.networkPolicy});
+  /// Optionally accepts global event listeners.
+  QueryClient({
+    required this.cache,
+    required this.networkPolicy,
+    void Function(String error)? onError,
+    void Function()? onSuccess,
+    void Function(String error)? onRefreshError,
+  }) {
+    _onError = onError;
+    _onSuccess = onSuccess;
+    _onRefreshError = onRefreshError;
+  }
+
+  /// Sets the global error listener
+  void setOnError(void Function(String error)? onError) {
+    _onError = onError;
+  }
+
+  /// Sets the global success listener
+  void setOnSuccess(void Function()? onSuccess) {
+    _onSuccess = onSuccess;
+  }
+
+  /// Sets the global refresh error listener
+  void setOnRefreshError(void Function(String error)? onRefreshError) {
+    _onRefreshError = onRefreshError;
+  }
+
+  /// Triggers the global error listener if set
+  void notifyError(String error) {
+    _onError?.call(error);
+  }
+
+  /// Triggers the global success listener if set
+  void notifySuccess() {
+    _onSuccess?.call();
+  }
+
+  /// Triggers the global refresh error listener if set
+  void notifyRefreshError(String error) {
+    _onRefreshError?.call(error);
+  }
 
   /// Retrieves or creates a [Query] instance.
   ///
@@ -46,6 +92,9 @@ class QueryClient {
       cache: cache,
       networkPolicy: networkPolicy,
       config: config,
+      onSuccess: _onSuccess,
+      onError: _onError,
+      onRefreshError: _onRefreshError,
     );
     _queries[keyString] = query;
     debugPrint('Created new Query: $keyString');
@@ -59,6 +108,7 @@ class QueryClient {
     GetNextPageParam<T, PageParam>? getNextPageParam,
     GetPreviousPageParam<T, PageParam>? getPreviousPageParam,
     QueryConfig config = const QueryConfig(),
+    PageParam? initialPageParam,
   }) {
     final keyString = queryKey.toString();
     if (_infiniteQueries.containsKey(keyString)) {
@@ -72,6 +122,10 @@ class QueryClient {
       getNextPageParam: getNextPageParam,
       getPreviousPageParam: getPreviousPageParam,
       config: config,
+      initialPageParam: initialPageParam,
+      onSuccess: _onSuccess,
+      onError: _onError,
+      onRefreshError: _onRefreshError,
     );
     _infiniteQueries[keyString] = query;
     debugPrint('Created new InfiniteQuery: $keyString');

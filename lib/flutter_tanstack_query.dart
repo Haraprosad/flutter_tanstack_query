@@ -6,6 +6,7 @@ export 'src/core/query_state.dart';
 export 'src/core/query_options.dart';
 export 'src/core/types.dart';
 export 'src/core/app_lifecycle_manager.dart';
+export 'src/core/adapters.dart';
 
 // Query management
 export 'src/query_client.dart';

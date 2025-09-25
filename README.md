@@ -29,8 +29,55 @@ A powerful, feature-rich data fetching and state management package for Flutter,
 - 🔄 **Real-time Sync**: Automatic synchronization when app comes online
 - 🧪 **Battle Tested**: Based on the proven TanStack Query architecture
 - 🎨 **Developer Friendly**: Intuitive API with excellent error handling
+- 💾 **Smart Caching**: Automatic type adapter registration for Hive
+- 🔧 **Enhanced Utilities**: flatData, isEmpty, and other convenience methods
+- 🌐 **Global Event Handlers**: Centralized success/error feedback across all queries
+- 🔃 **Pull-to-Refresh**: Built-in support with automatic state management
 
-## 📦 Installation
+## 🆕 Latest Improvements
+
+### Global Event Handlers
+- **Centralized Feedback**: Global onSuccess, onError, and onRefreshError handlers
+- **Consistent UX**: Unified error handling and success feedback across all queries
+- **Customizable**: Easy to integrate with your app's notification system
+
+### Enhanced Pull-to-Refresh Support
+- **Native Integration**: Seamless RefreshIndicator support with automatic state management
+- **Advanced Patterns**: Custom refresh handling for complex scenarios
+- **Infinite Query Support**: Pull-to-refresh works perfectly with paginated data
+
+### Enhanced Infinite Query Support
+- **flatData()**: Easily access flattened data from all pages
+- **isEmpty/isNotEmpty**: Convenient data state checking
+- **Better Error Handling**: Robust caching with fallbacks
+- **Type Safety**: Improved type adapter registration for complex objects
+
+### Automatic Cache Management
+- **Smart Serialization**: Automatically handles complex data types
+- **Hive Integration**: Seamless persistent storage with type adapters
+- **Graceful Degradation**: Falls back to memory-only if persistence fails
+
+## � Table of Contents
+
+- [📦 Installation](#-installation)
+- [🏁 Quick Start](#-quick-start)
+- [🎯 Core Features](#-core-features)
+  - [📊 Queries - Fetching Data](#1--queries---fetching-data)
+  - [🔄 Mutations - Updating Data](#2--mutations---updating-data)
+  - [📄 Infinite Queries - Pagination Made Easy](#3--infinite-queries---pagination-made-easy)
+- [🔄 Pull-to-Refresh Implementation](#-pull-to-refresh-implementation)
+- [🛠️ Advanced Configuration](#️-advanced-configuration)
+  - [Global Configuration](#global-configuration)
+  - [Global Event Handlers](#global-event-handlers)
+  - [Query-Specific Configuration](#query-specific-configuration)
+- [🔧 State Management Patterns](#-state-management-patterns)
+- [🌐 Offline Support & Sync](#-offline-support--sync)
+- [🏗️ Architecture & Best Practices](#️-architecture--best-practices)
+- [🧪 Testing](#-testing)
+- [❓ FAQ](#-faq)
+- [🤝 Contributing](#-contributing)
+
+## �📦 Installation
 
 Add this to your package's `pubspec.yaml` file:
 
@@ -54,7 +101,7 @@ flutter pub get
 
 ```dart
 import 'package:flutter/material.dart';
-import 'package:flutter_tanstack_query/flutter_tanstack_query.dart';
+import 'package:ayagro/packages/flutter_tanstack_query/lib/flutter_tanstack_query.dart'
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -73,6 +120,11 @@ class MyApp extends StatelessWidget {
     final queryClient = QueryClient(
       cache: QueryCache.instance,
       networkPolicy: NetworkPolicy.instance,
+      
+      // Optional: Add global event handlers for centralized feedback
+      onSuccess: () => debugPrint('🎉 Query executed successfully!'),
+      onError: (error) => debugPrint('❌ Query error: $error'),
+      onRefreshError: (error) => debugPrint('🔄❌ Refresh error: $error'),
     );
 
     return QueryClientProvider(
@@ -384,7 +436,384 @@ class InfiniteUserListScreen extends StatelessWidget {
 }
 ```
 
-## 🛠️ Advanced Configuration
+## � Pull-to-Refresh Implementation
+
+Flutter TanStack Query provides seamless pull-to-refresh functionality with automatic state management and error handling.
+
+### Basic Pull-to-Refresh with Queries
+
+The simplest way to implement pull-to-refresh is using `RefreshIndicator` with the query's `refetch` function:
+
+```dart
+class UserListWithRefresh extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Users with Pull-to-Refresh')),
+      body: UseQuery<List<User>>(
+        options: QueryOptions<List<User>>(
+          queryKey: ['users'],
+          queryFn: () => ApiService.fetchUsers(),
+          staleTime: Duration(minutes: 5),
+          refetchOnWindowFocus: true,
+        ),
+        builder: (context, result) {
+          // Show initial loading state
+          if (result.isLoading && !result.hasData) {
+            return Center(child: CircularProgressIndicator());
+          }
+
+          // Show error state if no cached data
+          if (result.isError && !result.hasData) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('Error: ${result.error}'),
+                  ElevatedButton(
+                    onPressed: result.refetch,
+                    child: Text('Retry'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          // Success state with pull-to-refresh
+          return RefreshIndicator(
+            // The refetch function handles the refresh logic
+            onRefresh: result.refetch,
+            child: ListView.builder(
+              physics: AlwaysScrollableScrollPhysics(), // Ensures scrollability
+              itemCount: result.data?.length ?? 0,
+              itemBuilder: (context, index) {
+                final user = result.data![index];
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundImage: NetworkImage(user.avatar),
+                  ),
+                  title: Text(user.name),
+                  subtitle: Text(user.email),
+                  trailing: result.isFetching && !result.isLoading
+                      ? SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : null,
+                );
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+```
+
+### Advanced Pull-to-Refresh with Custom Handling
+
+For more control over the refresh behavior, implement custom refresh logic:
+
+```dart
+class AdvancedRefreshList extends StatefulWidget {
+  @override
+  _AdvancedRefreshListState createState() => _AdvancedRefreshListState();
+}
+
+class _AdvancedRefreshListState extends State<AdvancedRefreshList> {
+  final GlobalKey<RefreshIndicatorState> _refreshKey = GlobalKey<RefreshIndicatorState>();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Advanced Refresh'),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh),
+            onPressed: () => _refreshKey.currentState?.show(),
+          ),
+        ],
+      ),
+      body: UseQuery<List<User>>(
+        options: QueryOptions<List<User>>(
+          queryKey: ['users', 'advanced'],
+          queryFn: () => ApiService.fetchUsers(),
+          staleTime: Duration(minutes: 2),
+          cacheTime: Duration(minutes: 10),
+          refetchOnWindowFocus: true,
+          refetchOnReconnect: true,
+        ),
+        builder: (context, result) {
+          return RefreshIndicator(
+            key: _refreshKey,
+            onRefresh: () async {
+              try {
+                await result.refetch();
+                
+                // Show success message on successful refresh
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Row(
+                      children: [
+                        Icon(Icons.check_circle, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text('Data refreshed successfully'),
+                      ],
+                    ),
+                    backgroundColor: Colors.green,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              } catch (error) {
+                // Error handling is managed by global onRefreshError handler
+                debugPrint('Refresh error handled by global handler: $error');
+              }
+            },
+            child: result.hasData
+                ? ListView.separated(
+                    physics: AlwaysScrollableScrollPhysics(),
+                    itemCount: result.data!.length,
+                    separatorBuilder: (context, index) => Divider(),
+                    itemBuilder: (context, index) {
+                      final user = result.data![index];
+                      return UserTile(
+                        user: user,
+                        isRefreshing: result.isFetching,
+                      );
+                    },
+                  )
+                : _buildEmptyOrLoadingState(result),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildEmptyOrLoadingState(QueryResult<List<User>> result) {
+    if (result.isLoading) {
+      return Center(child: CircularProgressIndicator());
+    }
+    
+    if (result.isError) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: Colors.red),
+            SizedBox(height: 16),
+            Text('Error loading data'),
+            SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: result.refetch,
+              child: Text('Try Again'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Center(child: Text('No data available'));
+  }
+}
+
+class UserTile extends StatelessWidget {
+  final User user;
+  final bool isRefreshing;
+
+  const UserTile({
+    Key? key,
+    required this.user,
+    required this.isRefreshing,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Stack(
+        children: [
+          CircleAvatar(
+            backgroundImage: NetworkImage(user.avatar),
+          ),
+          if (isRefreshing)
+            Positioned(
+              bottom: 0,
+              right: 0,
+              child: Container(
+                width: 16,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: Colors.blue,
+                  shape: BoxShape.circle,
+                ),
+                child: SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    valueColor: AlwaysStoppedAnimation(Colors.white),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+      title: Text(user.name),
+      subtitle: Text(user.email),
+    );
+  }
+}
+```
+
+### Pull-to-Refresh with Infinite Queries
+
+Implement pull-to-refresh for paginated data:
+
+```dart
+class InfiniteListWithRefresh extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Infinite List with Refresh')),
+      body: UseInfiniteQuery<List<User>, int>(
+        options: InfiniteQueryOptions<List<User>, int>(
+          queryKey: ['users', 'infinite', 'refresh'],
+          queryFn: ({pageParam = 1}) => ApiService.fetchUsers(page: pageParam),
+          getNextPageParam: (lastPage, allPages) {
+            return lastPage.length == 10 ? allPages.length + 1 : null;
+          },
+          staleTime: Duration(minutes: 5),
+          refetchOnWindowFocus: true,
+        ),
+        builder: (context, result) {
+          final allUsers = result.flatData;
+
+          return RefreshIndicator(
+            onRefresh: () async {
+              // Reset to first page and refetch
+              await result.refetch();
+            },
+            child: ListView.builder(
+              physics: AlwaysScrollableScrollPhysics(),
+              itemCount: allUsers.length + (result.hasNextPage ? 1 : 0),
+              itemBuilder: (context, index) {
+                // Regular user items
+                if (index < allUsers.length) {
+                  return UserTile(
+                    user: allUsers[index],
+                    isRefreshing: result.isFetching && index == 0, // Show indicator on first item
+                  );
+                }
+
+                // Load more button/indicator
+                return Container(
+                  padding: EdgeInsets.all(16),
+                  child: Center(
+                    child: result.isFetchingNextPage
+                        ? CircularProgressIndicator()
+                        : ElevatedButton(
+                            onPressed: result.hasNextPage ? result.fetchNextPage : null,
+                            child: Text('Load More'),
+                          ),
+                  ),
+                );
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+```
+
+### Refresh Indicators and States
+
+Customize refresh indicators based on different states:
+
+```dart
+class CustomRefreshIndicators extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return UseQuery<List<User>>(
+      options: QueryOptions<List<User>>(
+        queryKey: ['users', 'custom-refresh'],
+        queryFn: () => ApiService.fetchUsers(),
+      ),
+      builder: (context, result) {
+        return RefreshIndicator(
+          // Customize refresh indicator appearance
+          color: Theme.of(context).primaryColor,
+          backgroundColor: Colors.white,
+          strokeWidth: 3.0,
+          displacement: 50.0, // Distance from top
+          
+          onRefresh: result.refetch,
+          child: CustomScrollView(
+            physics: AlwaysScrollableScrollPhysics(),
+            slivers: [
+              // Custom refresh indicator in app bar
+              SliverAppBar(
+                title: Text('Custom Refresh'),
+                floating: true,
+                actions: [
+                  if (result.isFetching && !result.isLoading)
+                    Padding(
+                      padding: EdgeInsets.all(16),
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                ],
+              ),
+              
+              // Data list
+              if (result.hasData)
+                SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final user = result.data![index];
+                      return UserTile(
+                        user: user,
+                        isRefreshing: result.isFetching,
+                      );
+                    },
+                    childCount: result.data!.length,
+                  ),
+                )
+              else
+                SliverFillRemaining(
+                  child: _buildEmptyState(result),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyState(QueryResult<List<User>> result) {
+    if (result.isLoading) {
+      return Center(child: CircularProgressIndicator());
+    }
+    return Center(child: Text('Pull down to refresh'));
+  }
+}
+```
+
+### Best Practices for Pull-to-Refresh
+
+1. **Always provide physics**: Use `AlwaysScrollableScrollPhysics()` to ensure the list is scrollable even with few items
+2. **Handle empty states**: Provide meaningful feedback when there's no data
+3. **Show refresh indicators**: Give visual feedback during refresh operations
+4. **Error handling**: Let global error handlers manage refresh errors, or provide custom handling
+5. **Stale time management**: Configure appropriate `staleTime` to balance freshness and performance
+
+## �🛠️ Advanced Configuration
 
 ### Global Configuration
 
@@ -413,6 +842,125 @@ class MyApp extends StatelessWidget {
     );
   }
 }
+```
+
+### Global Event Handlers
+
+Set up global event listeners to handle success, error, and refresh error events across all queries:
+
+```dart
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final queryClient = QueryClient(
+      cache: QueryCache.instance,
+      networkPolicy: NetworkPolicy.instance,
+      
+      // Global event listeners for centralized feedback
+      onSuccess: () {
+        debugPrint('🎉 Query executed successfully!');
+        // Show success toast/snackbar if needed
+      },
+      
+      onError: (String error) {
+        debugPrint('❌ Query error: $error');
+        // Show error message to user
+        ScaffoldMessenger.of(navigatorKey.currentContext!).showSnackBar(
+          SnackBar(
+            content: Text('Error: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      },
+      
+      onRefreshError: (String error) {
+        debugPrint('🔄❌ Refresh error: $error');
+        // Show refresh-specific error message
+        ScaffoldMessenger.of(navigatorKey.currentContext!).showSnackBar(
+          SnackBar(
+            content: Text('Refresh failed: $error'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      },
+    );
+
+    return QueryClientProvider(
+      client: queryClient,
+      child: MaterialApp(
+        navigatorKey: navigatorKey, // Add global navigator key
+        home: HomeScreen(),
+      ),
+    );
+  }
+}
+```
+
+### Custom Event Handler Implementation
+
+For more sophisticated event handling, create a dedicated handler class:
+
+```dart
+class QueryEventHandlers {
+  static final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
+      GlobalKey<ScaffoldMessengerState>();
+
+  static void onSuccess() {
+    debugPrint('🎉 Query executed successfully!');
+    // Add custom success handling logic
+  }
+
+  static void onError(String error) {
+    debugPrint('❌ Query error: $error');
+    _showSnackBar(
+      message: 'Failed to load data: $error',
+      backgroundColor: Colors.red,
+      icon: Icons.error,
+    );
+  }
+
+  static void onRefreshError(String error) {
+    debugPrint('🔄❌ Refresh error: $error');
+    _showSnackBar(
+      message: 'Refresh failed: $error',
+      backgroundColor: Colors.orange,
+      icon: Icons.refresh_outlined,
+    );
+  }
+
+  static void _showSnackBar({
+    required String message,
+    required Color backgroundColor,
+    required IconData icon,
+  }) {
+    final scaffoldMessenger = scaffoldMessengerKey.currentState;
+    if (scaffoldMessenger != null) {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(icon, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(child: Text(message)),
+            ],
+          ),
+          backgroundColor: backgroundColor,
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+}
+
+// Usage in app initialization
+final queryClient = QueryClient(
+  cache: QueryCache.instance,
+  networkPolicy: NetworkPolicy.instance,
+  onSuccess: QueryEventHandlers.onSuccess,
+  onError: QueryEventHandlers.onError,
+  onRefreshError: QueryEventHandlers.onRefreshError,
+);
 ```
 
 ### Query-Specific Configuration

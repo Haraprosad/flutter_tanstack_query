@@ -23,8 +23,6 @@ class InfiniteQueryState<T> {
   final DateTime? lastFetched;
   final bool isFetchingNextPage;
   final bool hasNextPage;
-  final Object?
-  lastRefreshError; // Track last refresh error even when showing cached data
 
   const InfiniteQueryState._({
     this.pages = const [],
@@ -34,7 +32,6 @@ class InfiniteQueryState<T> {
     this.lastFetched,
     this.isFetchingNextPage = false,
     this.hasNextPage = false,
-    this.lastRefreshError,
   });
 
   factory InfiniteQueryState.idle() =>
@@ -68,13 +65,6 @@ class InfiniteQueryState<T> {
     status: QueryStatus.error,
     isStale: previousPages != null,
   );
-
-  factory InfiniteQueryState.refreshing(List<QueryPage<T>> currentPages) =>
-      InfiniteQueryState._(
-        pages: currentPages,
-        status: QueryStatus.loading,
-        isStale: true,
-      );
 
   bool get isIdle => status == QueryStatus.idle;
   bool get isLoading => status == QueryStatus.loading;
@@ -145,11 +135,6 @@ class InfiniteQuery<T, PageParam> {
   final QueryCache _cache;
   final NetworkPolicy _networkPolicy;
 
-  // Global event listeners
-  final void Function()? _onSuccess;
-  final void Function(String error)? _onError;
-  final void Function(String error)? _onRefreshError;
-
   final StreamController<InfiniteQueryState<T>> _stateController =
       StreamController<InfiniteQueryState<T>>.broadcast();
 
@@ -167,22 +152,9 @@ class InfiniteQuery<T, PageParam> {
     this.getPreviousPageParam,
     this.config = const QueryConfig(),
     this.initialPageParam,
-    void Function()? onSuccess,
-    void Function(String error)? onError,
-    void Function(String error)? onRefreshError,
   }) : _cache = cache,
        _networkPolicy = networkPolicy,
-       _onSuccess = onSuccess,
-       _onError = onError,
-       _onRefreshError = onRefreshError,
        _state = InfiniteQueryState.idle() {
-    // Debug: Log listener configuration
-    debugPrint('🔧 InfiniteQuery created with listeners:');
-    debugPrint('  - onSuccess: ${onSuccess != null ? "✅ SET" : "❌ NULL"}');
-    debugPrint('  - onError: ${onError != null ? "✅ SET" : "❌ NULL"}');
-    debugPrint(
-      '  - onRefreshError: ${onRefreshError != null ? "✅ SET" : "❌ NULL"}',
-    );
     _initialize();
   }
 
@@ -191,40 +163,8 @@ class InfiniteQuery<T, PageParam> {
 
   void _updateState(InfiniteQueryState<T> newState) {
     if (_disposed) return;
-
-    final oldStatus = _state.status;
-    final newStatus = newState.status;
-
-    // Debug: Log all status changes
-    debugPrint('📊 InfiniteQuery status change: $oldStatus → $newStatus');
-    if (newState.error != null) {
-      debugPrint('📊 Error details: ${newState.error}');
-    }
-
     _state = newState;
     _stateController.add(newState);
-
-    // Trigger global listeners on status changes
-    if (oldStatus != newStatus) {
-      debugPrint('🎯 Status actually changed, checking listeners...');
-      switch (newStatus) {
-        case QueryStatus.success:
-          debugPrint('🎯 Triggering onSuccess listener...');
-          _onSuccess?.call();
-          break;
-        case QueryStatus.error:
-          debugPrint('🎯 Triggering onError listener...');
-          if (newState.error != null) {
-            _onError?.call(newState.error.toString());
-          }
-          break;
-        default:
-          debugPrint('🎯 Status is ${newStatus}, no listener to trigger');
-          break;
-      }
-    } else {
-      debugPrint('🎯 Status unchanged, not triggering listeners');
-    }
   }
 
   void _initialize() async {
@@ -291,11 +231,9 @@ class InfiniteQuery<T, PageParam> {
       );
     } catch (error) {
       debugPrint(
-        '🚨 Error fetching initial page for ${queryKey.toString()}: $error',
+        'Error fetching initial page for ${queryKey.toString()}: $error',
       );
-      debugPrint('🚨 About to call _updateState with error status...');
       _updateState(InfiniteQueryState.error(error, state.pages));
-      debugPrint('🚨 _updateState called with error status');
     }
   }
 
@@ -334,18 +272,8 @@ class InfiniteQuery<T, PageParam> {
         ),
       );
     } catch (error) {
-      debugPrint(
-        '🚨 Error fetching next page for ${queryKey.toString()}: $error',
-      );
-      debugPrint('🚨 About to update state with ERROR STATUS...');
-      _updateState(
-        state.copyWith(
-          error: error,
-          isFetchingNextPage: false,
-          status: QueryStatus.error, // Explicitly set error status
-        ),
-      );
-      debugPrint('🚨 State updated with error status');
+      debugPrint('Error fetching next page for ${queryKey.toString()}: $error');
+      _updateState(state.copyWith(error: error, isFetchingNextPage: false));
     }
   }
 
@@ -383,19 +311,9 @@ class InfiniteQuery<T, PageParam> {
       );
     } catch (error) {
       debugPrint(
-        '🚨 Error fetching previous page for ${queryKey.toString()}: $error',
+        'Error fetching previous page for ${queryKey.toString()}: $error',
       );
-      debugPrint(
-        '🚨 About to update state with ERROR STATUS for previous page...',
-      );
-      _updateState(
-        state.copyWith(
-          error: error,
-          isStale: true,
-          status: QueryStatus.error, // Explicitly set error status
-        ),
-      );
-      debugPrint('🚨 State updated with error status for previous page');
+      _updateState(state.copyWith(error: error, isStale: true));
     }
   }
 
@@ -406,62 +324,14 @@ class InfiniteQuery<T, PageParam> {
   Future<void> refresh() async {
     if (_disposed || !config.enabled) return;
 
-    // Store current cached data to preserve it during refresh
-    final currentState = _state;
-    final currentData = currentState.pages;
+    // Clear cached data for a fresh start
+    await _cache.remove(queryKey.toString());
 
-    try {
-      // Mark as refreshing while keeping existing data visible
-      _updateState(InfiniteQueryState.refreshing(currentData));
+    // Reset to empty state while fetching
+    _updateState(InfiniteQueryState.loading([]));
 
-      // Fetch fresh data from the first page without clearing cache first
-      final firstPageData = await _fetchWithRetry(pageParam: initialPageParam);
-
-      // If successful, create new pages with fresh data
-      final newPages = [
-        QueryPage(data: firstPageData, pageParam: initialPageParam),
-      ];
-
-      // Clear old cache and update with fresh data
-      await _cache.remove(queryKey.toString());
-      await _cache.set(queryKey.toString(), newPages, ttl: config.cacheTime);
-
-      _updateState(
-        InfiniteQueryState._(
-          pages: newPages,
-          status: QueryStatus.success,
-          lastFetched: DateTime.now(),
-          hasNextPage: _calculateHasNextPage(newPages),
-          lastRefreshError: null, // Clear any previous refresh errors
-        ),
-      );
-    } catch (error) {
-      // On error, keep the cached data but track the refresh error
-      if (currentData.isNotEmpty) {
-        // Show cached data with refresh error tracked
-        _updateState(
-          InfiniteQueryState._(
-            pages: currentData,
-            status: QueryStatus.success,
-            isStale: true,
-            lastFetched: currentState.lastFetched,
-            hasNextPage: currentState.hasNextPage,
-            lastRefreshError: error, // Track the refresh error
-          ),
-        );
-
-        // Trigger refresh error listener
-        debugPrint(
-          '🔄 Triggering onRefreshError listener for: ${error.toString()}',
-        );
-        _onRefreshError?.call(error.toString());
-      } else {
-        // No cached data available, show error state
-        debugPrint('🔄 No cached data, updating to error state');
-        _updateState(InfiniteQueryState.error(error));
-      }
-      // Don't rethrow - we want refresh to complete successfully even with errors
-    }
+    // Fetch fresh data from the first page
+    await fetch(force: true, initialPageParam: initialPageParam);
   }
 
   Future<T> _fetchWithRetry({PageParam? pageParam}) async {
