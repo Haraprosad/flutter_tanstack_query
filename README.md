@@ -993,6 +993,54 @@ UseQuery<User>(
 
 ## 🔧 State Management Patterns
 
+### Cache Management
+
+The package provides powerful cache management capabilities, especially useful during authentication workflows:
+
+```dart
+class LogoutButton extends StatelessWidget {
+  const LogoutButton({super.key});
+
+  Future<void> _handleLogout(BuildContext context) async {
+    try {
+      // Get the QueryClient from the nearest provider
+      final queryClient = QueryClientProvider.of(context);
+      
+      // Clear all cached data
+      await queryClient.queryCache.clear();
+      
+      // Perform your logout logic
+      await AuthService.logout();
+      
+      // Navigate to login screen
+      if (context.mounted) {
+        Navigator.of(context).pushReplacementNamed('/login');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Logout failed: $e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton(
+      onPressed: () => _handleLogout(context),
+      child: const Text('Logout'),
+    );
+  }
+}
+```
+
+Key features for cache management:
+- **Manual Cache Clearing**: Clear all cached data during logout
+- **Automatic Cache Persistence**: Data is automatically persisted using Hive
+- **Selective Cache Updates**: Invalidate specific queries when needed
+- **Cache Control**: Fine-grained control over cache lifetime and staleness
+
 ### Manual Query Control
 
 Sometimes you need manual control over queries:

@@ -1,6 +1,6 @@
 name: flutter_tanstack_query
 description: A powerful data fetching and state management package for Flutter inspired by TanStack Query (React Query). Features automatic caching, background updates, offline support, and optimistic UI updates.
-version: 0.0.1+1
+version: 0.0.1+2
 homepage: https://github.com/Haraprosad/flutter_tanstack_query
 repository: https://github.com/Haraprosad/flutter_tanstack_query
 issue_tracker: https://github.com/Haraprosad/flutter_tanstack_query/issues

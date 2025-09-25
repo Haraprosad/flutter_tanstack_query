@@ -27,19 +27,19 @@ class Mutation<T, V> {
   MutationState<T> _state;
 
   bool _disposed = false;
-  
+
   // Data for rollback in case of optimistic update failure
   Map<List<Object>, dynamic> _rollbackCacheData = {};
-  
+
   /// Creates a [Mutation] instance.
   Mutation({
     required this.mutationFn,
     required QueryCache cache,
     required QueryClient queryClient,
     this.config = const MutationConfig(),
-  })  : _cache = cache,
-        _queryClient = queryClient,
-        _state = MutationState.idle();
+  }) : _cache = cache,
+       _queryClient = queryClient,
+       _state = MutationState.idle();
 
   /// Exposes the stream of mutation state changes.
   Stream<MutationState<T>> get stateStream => _stateController.stream;
@@ -113,10 +113,15 @@ class Mutation<T, V> {
         _rollbackCacheData[queryKey] = cachedData;
 
         // Apply optimistic update
-        final optimisticData = config.optimisticUpdate!(variables, cachedData as T);
+        final optimisticData = config.optimisticUpdate!(
+          variables,
+          cachedData as T,
+        );
         await _cache.set(queryKey.toString(), optimisticData);
         // Also update the in-memory state of the Query object if it exists
-        _queryClient.getQuery(queryKey, () async => optimisticData).setData(optimisticData);
+        _queryClient
+            .getQuery(queryKey, () async => optimisticData)
+            .setData(optimisticData);
       }
     }
     debugPrint('Optimistic update applied for mutation.');
@@ -129,7 +134,9 @@ class Mutation<T, V> {
       final originalData = entry.value;
       await _cache.set(queryKey.toString(), originalData);
       // Also revert the in-memory state of the Query object
-      _queryClient.getQuery(queryKey, () async => originalData).setData(originalData);
+      _queryClient
+          .getQuery(queryKey, () async => originalData)
+          .setData(originalData);
     }
     debugPrint('Optimistic update rolled back.');
   }
