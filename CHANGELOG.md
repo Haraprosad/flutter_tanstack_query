@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added documentation for manual cache clearing functionality during logout
 - Added examples for cache management in authentication workflows
 
-## [0.0.1+2] - 2025-09-25
+## [0.0.1+3] - 2025-09-25
 
 ### Features
 
